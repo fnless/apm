@@ -1,0 +1,181 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "signozCollector.fullname" . }}
+  labels:
+    {{- include "signozCollector.labels" . | nindent 4 }}
+  {{- if .Values.signozCollector.annotations }}
+  annotations:
+    {{ toYaml .Values.signozCollector.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "signozCollector.selectorLabels" . | nindent 6 }}
+  minReadySeconds: {{ .Values.signozCollector.minReadySeconds }}
+  progressDeadlineSeconds: {{ .Values.signozCollector.progressDeadlineSeconds }}
+  {{- if not .Values.signozCollector.autoscaling.enabled }}
+  replicas: {{ .Values.signozCollector.replicaCount }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.signozCollector.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        checksum/config: {{ include (print $.Template.BasePath "/signoz-otel-collector/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "signozCollector.selectorLabels" . | nindent 8 }}
+        {{- with .Values.signozCollector.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.signozCollector.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      serviceAccountName: {{ include "signozCollector.serviceAccountName" . }}
+      priorityClassName: {{ .Values.signozCollector.priorityClassName | quote }}
+      {{- with .Values.signozCollector.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.signozCollector.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.signozCollector.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.signozCollector.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.signozCollector.podSecurityContext | nindent 8 }}
+      # todo: add k8s-wait-for initContainer here
+      # this initContainer waits for the schema migrator job to finish
+      initContainers:
+        {{- if .Values.schemaMigrator.enabled }}
+        - name: "{{ include "signozCollector.fullname" . }}-migrate-init"
+          image: {{ include "schemaMigrator.initContainers.wait.image" . }}
+          imagePullPolicy: {{ .Values.schemaMigrator.initContainers.wait.image.pullPolicy }}
+          args:
+          - "job"
+          {{- if .Release.IsInstall }}
+          - "{{ include "schemaMigrator.fullname" . }}-init"
+          {{- else }}
+          - "{{ include "schemaMigrator.fullname" . }}-upgrade"
+          {{- end }}
+        {{- end }}
+        {{- if .Values.signozCollector.initContainers.init.enabled }}
+        - name: {{ include "signozCollector.fullname" . }}-init
+          image: {{ include "signozCollector.initContainers.init.image" . }}
+          imagePullPolicy: {{ .Values.signozCollector.initContainers.init.image.pullPolicy }}
+          env:
+            {{- include "snippet.clickhouse-credentials" . | nindent 12 }}
+          {{- with .Values.signozCollector.initContainers.init.command }}
+          command:
+            - sh
+            - -c
+            - until wget --user "${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}" --spider -q {{ include "clickhouse.httpUrl" $ }}{{ .endpoint }}; do echo -e "{{ .waitMessage }}"; sleep {{ .delay }}; done; echo -e "{{ .doneMessage }}";
+          {{- end }}
+          resources:
+            {{- toYaml .Values.signozCollector.initContainers.init.resources | nindent 12 }}
+        {{- end }}
+      containers:
+        - name: {{ template "signozCollector.fullname" . }}
+          image: {{ template "signozCollector.image" . }}
+          imagePullPolicy: {{ .Values.signozCollector.image.pullPolicy }}
+          ports:
+            {{- range $key, $port := .Values.signozCollector.ports }}
+            {{- if $port.enabled }}
+            - name: {{ $key }}
+              containerPort: {{ $port.containerPort }}
+              protocol: {{ $port.protocol }}
+            {{- end }}
+            {{- end }}
+          {{- with .Values.signozCollector.command.name }}
+          command:
+            - {{ . | quote }}
+          {{- end }}
+          args:
+            {{- if .Values.signozCollector.configMap.create }}
+            - "--config=/conf/otel-collector-config.yaml"
+            - "--manager-config=/conf/otel-collector-opamp-config.yaml"
+            - "--copy-path=/var/tmp/collector-config.yaml"
+            {{- end }}
+            {{- range .Values.signozCollector.command.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          {{- with .Values.signozCollector.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            {{- include "snippet.clickhouse-env" . | nindent 12 }}
+            {{- include "snippet.k8s-env" . | nindent 12 }}
+            - name: K8S_CLUSTER_NAME
+              value: {{ default .Values.global.clusterName .Values.clusterName }}
+            - name: SIGNOZ_COMPONENT
+              value: {{ default "otel-collector" .Values.signozCollector.name}}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: signoz.component=$(SIGNOZ_COMPONENT),k8s.cluster.name=$(K8S_CLUSTER_NAME),k8s.pod.uid=$(K8S_POD_UID),k8s.pod.ip=$(K8S_POD_IP)
+            - name: LOW_CARDINAL_EXCEPTION_GROUPING
+              value: {{ default "false" .Values.signozCollector.lowCardinalityExceptionGrouping | quote }}
+            {{- range $key, $val := .Values.signozCollector.additionalEnvs }}
+            - name: {{ $key }}
+              value: {{ $val | toYaml }}
+            {{- end }}
+          volumeMounts:
+            - name: otel-collector-config-vol
+              mountPath: /conf
+            {{- if .Values.signozCollector.extraVolumeMounts }}
+              {{ toYaml .Values.signozCollector.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+            # - name: otel-collector-secrets
+            #   mountPath: /secrets
+          {{- if .Values.signozCollector.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.signozCollector.livenessProbe.port }}
+              path: {{ .Values.signozCollector.livenessProbe.path }}
+            initialDelaySeconds: {{ .Values.signozCollector.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.signozCollector.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.signozCollector.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.signozCollector.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.signozCollector.livenessProbe.failureThreshold }}
+          {{- else if .Values.signozCollector.customLivenessProbe }}
+          livenessProbe: {{- toYaml .Values.signozCollector.customLivenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.signozCollector.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              port: {{ .Values.signozCollector.readinessProbe.port }}
+              path: {{ .Values.signozCollector.readinessProbe.path }}
+            initialDelaySeconds: {{ .Values.signozCollector.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.signozCollector.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.signozCollector.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.signozCollector.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.signozCollector.readinessProbe.failureThreshold }}
+          {{- else if .Values.signozCollector.customReadinessProbe }}
+          readinessProbe: {{- toYaml .Values.signozCollector.customReadinessProbe | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.signozCollector.resources | nindent 12 }}
+      volumes:
+        - name: otel-collector-config-vol
+          configMap:
+            name: {{ include "signozCollector.fullname" . }}
+        {{- if .Values.signozCollector.extraVolumes }}
+          {{ toYaml .Values.signozCollector.extraVolumes | nindent 8 }}
+        {{- end }}
+#        - secret:
+#            name: otel-collector-secrets
+#            items:
+#              - key: cert.pem
+#                path: cert.pem
+#              - key: key.pem
+#                path: key.pem

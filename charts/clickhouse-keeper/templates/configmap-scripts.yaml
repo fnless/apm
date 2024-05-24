@@ -1,0 +1,17 @@
+# Setup ClickHouse Keeper settings
+{{ $root := . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "clickhouse-keeper.fullname" . }}-scripts
+data:
+  env.sh: |
+    #!/usr/bin/env bash
+    export KEEPER_SERVER_ID=`expr $POD_INDEX + 1`
+
+  keeperStart.sh: |
+    #!/usr/bin/env bash
+    set -ex
+    source /conf/env.sh
+
+    clickhouse-keeper --config-file=/etc/clickhouse-keeper/keeper_config.xml

@@ -1,0 +1,9 @@
+apiVersion: v2
+appVersion: 0.45.0
+description: A Helm chart for Signoz
+name: signoz
+sources:
+- https://github.com/signoz/signoz
+- https://github.com/signoz/signoz-otel-collector
+type: application
+version: 0.1.0

@@ -1,0 +1,17 @@
+# Setup Headless Service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  # DNS would be like clickhouse-keeper-0.clickhouse-keepers.namespace.svc
+  name: {{ include "clickhouse-keeper.fullname" . }}s
+  labels:
+    {{- include "clickhouse-keeper.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: {{ .Values.service.raftPort }}
+      name: raft
+    - port: {{ .Values.service.clientPort }}
+      name: client
+  clusterIP: None
+  selector:
+    {{- include "clickhouse-keeper.selectorLabels" . | nindent 4 }}

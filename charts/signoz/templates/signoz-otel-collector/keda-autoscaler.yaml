@@ -1,0 +1,19 @@
+{{- if and .Values.signozCollector.autoscaling.enabled .Values.signozCollector.autoscaling.keda.enabled -}}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "signozCollector.fullname" . }}
+spec:
+  scaleTargetRef:
+    apiVersion:    apps/v1  # Optional. Default: apps/v1
+    kind:          Deployment        # Optional. Default: Deployment
+    name:          {{ include "signozCollector.fullname" . }}     # Mandatory. Must be in the same namespace as the ScaledObject
+  pollingInterval: {{ .Values.signozCollector.autoscaling.keda.pollingInterval }}    # Optional. Default: 30 seconds
+  cooldownPeriod:  {{ .Values.signozCollector.autoscaling.keda.cooldownPeriod }}     # Optional. Default: 300 seconds
+  minReplicaCount: {{ .Values.signozCollector.autoscaling.keda.minReplicaCount }}    # Optional. Default: 0
+  maxReplicaCount: {{ .Values.signozCollector.autoscaling.keda.maxReplicaCount }}    # Optional. Default: 100
+  {{- with .Values.signozCollector.autoscaling.keda.triggers }}
+  triggers:
+    {{- toYaml . | nindent 4 }}
+  {{ end }}
+{{ end }}

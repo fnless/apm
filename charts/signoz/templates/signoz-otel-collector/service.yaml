@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "signozCollector.fullname" . }}
+  labels:
+    {{- include "signozCollector.labels" . | nindent 4 }}
+{{- with .Values.signozCollector }}
+    {{- if .service.labels }}
+      {{- toYaml .service.labels | nindent 4 }}
+    {{- end}}
+{{- if .service.annotations }}
+  annotations:
+    {{- toYaml .service.annotations | nindent 4 }}
+{{- end }}
+spec:
+  type: {{ .service.type }}
+  ports:
+    {{- include "signozCollector.portsConfig" . | indent 4 -}}
+{{- end }}
+  selector:
+    {{- include "signozCollector.selectorLabels" . | nindent 4 }}

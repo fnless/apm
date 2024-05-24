@@ -1,0 +1,17 @@
+# Setup Service to provide access to ClickHouse keeper for clients
+apiVersion: v1
+kind: Service
+metadata:
+  # DNS would be like clickhouse-keeper.namespace.svc
+  name: {{ include "clickhouse-keeper.fullname" . }}
+  labels:
+    {{- include "clickhouse-keeper.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.clientPort }}
+      name: client
+    - port: {{ .Values.service.metricsPort }}
+      name: metrics
+  selector:
+    {{- include "clickhouse-keeper.selectorLabels" . | nindent 4 }}

@@ -1,0 +1,1617 @@
+# Global override values
+global:
+  # -- Overrides the Image registry globally
+  imageRegistry: &GLOBAL_IMAGE_REGISTRY null
+  # -- Global Image Pull Secrets
+  imagePullSecrets: []
+  # -- Overrides the storage class for all PVC with persistence enabled.
+  # If not set, the default storage class is used.
+  # If set to "-", storageClassName: "", which disables dynamic provisioning
+  storageClass: null
+  # -- Kubernetes cluster domain
+  # It is used only when components are installed in different namespace
+  clusterDomain: cluster.local
+  # -- Kubernetes cluster name
+  # It is used to attached to telemetry data via resource detection processor
+  clusterName: ""
+  # -- Kubernetes cluster cloud provider along with distribution if any.
+  # example: `aws`, `azure`, `gcp`, `gcp/autogke`, `hcloud`, `other`
+  # Based on the cloud, storage class for the persistent volume is selected.
+  # When set to 'aws' or 'gcp' along with `installCustomStorageClass` enabled, then new expandible storage class is created.
+  cloud: other
+
+# -- SigNoz chart name override
+nameOverride: ""
+
+# -- SigNoz chart full name override
+fullnameOverride: ""
+
+# -- Name of the K8s cluster. Used by SigNoz OtelCollectors to attach in telemetry data.
+clusterName: ""
+
+# -- Image Registry Secret Names for all SigNoz components.
+# If global.imagePullSecrets is set as well, it will merged.
+# However, this has lower precedence than the imagePullSecrets at inner component level.
+imagePullSecrets: []
+
+## External clickhouse configuration
+externalClickhouse:
+  # -- Host of the external cluster.
+  host: "clickhouse.clickhouse.svc.cluster.local."
+  # -- Name of the external cluster to run DDL queries on.
+  cluster: cluster
+  # -- Database name for the external cluster
+  database: signoz_metrics
+  # -- Clickhouse trace database (SigNoz Traces)
+  traceDatabase: signoz_traces
+  # -- Clickhouse log database (SigNoz Logs)
+  logDatabase: signoz_logs
+  # -- User name for the external cluster to connect to the external cluster as
+  user: "admin"
+  # -- Password for the cluster.
+  password: "changeme"
+  # -- Whether to use TLS connection connecting to ClickHouse
+  secure: false
+  # -- Whether to verify TLS connection connecting to ClickHouse
+  verify: false
+  # -- HTTP port of Clickhouse
+  httpPort: 8123
+  # -- TCP port of Clickhouse
+  tcpPort: 9000
+
+frontend:
+  name: "frontend"
+  replicaCount: 1
+
+  image:
+    registry: docker.io
+    repository: signoz/frontend
+    tag: 0.44.0
+    pullPolicy: IfNotPresent
+
+  # -- Image Registry Secret Names for Frontend
+  # If set, this has higher precedence than the root level or global value of imagePullSecrets.
+  imagePullSecrets: []
+
+  # Frontend Service Account
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name:
+
+  # Frontend service
+  service:
+    # -- Annotations to use by service associated to Frontend
+    annotations: {}
+    # -- Labels to use by service associated to Frontend
+    labels: {}
+    # -- Service Type: LoadBalancer (allows external access) or NodePort (more secure, no extra cost)
+    type: ClusterIP
+    # -- Frontend HTTP port
+    port: 3301
+
+  initContainers:
+    init:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: busybox
+        tag: 1.35
+        pullPolicy: IfNotPresent
+      command:
+        delay: 5
+        endpoint: /api/v1/health?live=1
+        waitMessage: "waiting for query-service"
+        doneMessage: "query-service ready, starting frontend now"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+
+  configVars: {}
+
+  # -- Frontend deployment annotations
+  annotations:
+    "helm.sh/hook-weight": "5"
+  # -- Frontend pod security context
+  podSecurityContext: {}
+    # fsGroup: 2000
+
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+  ingress:
+    # -- Enable ingress for Frontend
+    enabled: false
+    # -- Ingress Class Name to be used to identify ingress controllers
+    className: ""
+    # -- Annotations to Frontend Ingress
+    annotations: {}
+      # kubernetes.io/ingress.class: nginx
+      # kubernetes.io/tls-acme: "true"
+      # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # -- Frontend Ingress Host names with their path details
+    hosts:
+      - host: frontend.domain.com
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            port: 3301
+    # -- Frontend Ingress TLS
+    tls: []
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - frontend.domain.com
+
+  # -- Frontend Nginx extra configurations
+  nginxExtraConfig: |
+      client_max_body_size 24M;
+      large_client_header_buffers 8 16k;
+
+  # -- Configure resource requests and limits. Update according to your own use
+  # case as these values might not be suitable for your workload.
+  # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  #
+  # @default -- See `values.yaml` for defaults
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    # limits:
+    #   cpu: 200m
+    #   memory: 200Mi
+
+  # -- Frontend priority class name
+  priorityClassName: ""
+  # -- Node selector for settings for Frontend pod
+  nodeSelector: {}
+  # -- Toleration labels for Frontend pod assignment
+  tolerations: []
+  # -- Affinity settings for Frontend pod
+  affinity: {}
+  # -- TopologySpreadConstraints describes how Frontend pods ought to spread
+  topologySpreadConstraints: []
+
+queryService:
+  name: "query-service"
+  replicaCount: 1
+  image:
+    registry: docker.io
+    repository: signoz/query-service
+    tag: 0.44.0
+    pullPolicy: IfNotPresent
+
+  # -- Image Registry Secret Names for Query-Service
+  # If set, this has higher precedence than the root level or global value of imagePullSecrets.
+  imagePullSecrets: []
+
+  # Query-Service Service Account
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name:
+
+  # Query-Service service
+  service:
+    # -- Annotations to use by service associated to Query-Service
+    annotations: {}
+    # -- Labels to use by service associated to Query-Service
+    labels: {}
+    # -- Service Type: LoadBalancer (allows external access) or NodePort (more secure, no extra cost)
+    type: ClusterIP
+    # -- Query-Service HTTP port
+    port: 8080
+    # -- Query-Service Internal port
+    internalPort: 8085
+    # -- Query-Service OpAMP Internal port
+    opampPort: 4320
+    # -- Set this to you want to force a specific nodePort for http.
+    # Must be use with service.type=NodePort
+    nodePort: null
+    # -- Set this to you want to force a specific nodePort for internal.
+    # Must be use with service.type=NodePort
+    internalNodePort: null
+
+  # -- Query-Service annotations
+  annotations:
+    "helm.sh/hook-weight": "2"
+
+  # -- Query-Service additional arguments for command line
+  additionalArgs: []
+    # - --prefer-delta=true
+
+  # -- Additional environments to set for queryService
+  additionalEnvs: {}
+    # env_key: env_value
+
+  initContainers:
+    init:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: busybox
+        tag: 1.35
+        pullPolicy: IfNotPresent
+      command:
+        delay: 5
+        endpoint: /ping
+        waitMessage: "waiting for clickhouseDB"
+        doneMessage: "clickhouse ready, starting query service now"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+    migration:
+      enabled: false
+      image:
+        registry: docker.io
+        repository: busybox
+        tag: 1.35
+        pullPolicy: IfNotPresent
+      args: []
+      command: []
+        # - sh
+        # - -c
+        # - |
+        #   echo "Running migration"
+        #   sleep 10  # Replace with actual migration command
+        #   echo "Migration completed"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+
+  configVars:
+    storage: clickhouse
+    # ClickHouse URL is set and applied internally.
+    # Don't override unless you know what you are doing.
+    # clickHouseUrl: tcp://clickhouse_operator:clickhouse_operator_password@my-release-clickhouse:9000/signoz_traces
+    goDebug: netdns=go
+    telemetryEnabled: true
+    deploymentType: kubernetes-helm
+
+  # Query-Service cache options
+  cache:
+    # -- Whether to enable cache for Query-Service
+    enabled: true
+    # -- Cache flux interval for Query-Service
+    fluxInterval: 30m
+    # -- Cache configurations for Query-Service
+    config:
+      name: cache
+      provider: inmemory
+      inmemory:
+        ttl: 24h
+
+  podSecurityContext: {}
+    # fsGroup: 2000
+
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+  # -- Configure liveness and readiness probes.
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+  livenessProbe:
+    enabled: true
+    port: http
+    path: /api/v1/health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    port: http
+    path: /api/v1/health?live=1
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  # -- Custom liveness probe
+  customLivenessProbe: {}
+  # -- Custom readiness probe
+  customReadinessProbe: {}
+
+  ingress:
+    # -- Enable ingress for Query-Service
+    enabled: false
+    # -- Ingress Class Name to be used to identify ingress controllers
+    className: ""
+    # -- Annotations to Query-Service Ingress
+    annotations: {}
+      # kubernetes.io/ingress.class: nginx
+      # kubernetes.io/tls-acme: "true"
+      # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # -- Query-Service Ingress Host names with their path details
+    hosts:
+      - host: query-service.domain.com
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            port: 8080
+    # -- Query-Service Ingress TLS
+    tls: []
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - query-service.domain.com
+
+  # -- Configure resource requests and limits. Update according to your own use
+  # case as these values might not be suitable for your workload.
+  # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  #
+  # @default -- See `values.yaml` for defaults
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    # limits:
+    #   cpu: 750m
+    #   memory: 1000Mi
+
+  # -- QueryService priority class name
+  priorityClassName: ""
+  # -- Node selector for settings for QueryService pod
+  nodeSelector: {}
+  # -- Toleration labels for QueryService pod assignment
+  tolerations: []
+  # -- Affinity settings for QueryService pod
+  affinity: {}
+  # -- TopologySpreadConstraints describes how QueryService pods ought to spread
+  topologySpreadConstraints: []
+
+  persistence:
+    # -- Enable data persistence using PVC for SQLiteDB data.
+    enabled: true
+
+    # -- Name of an existing PVC to use (only when deploying a single replica)
+    existingClaim: ""
+
+    # -- Persistent Volume Storage Class to use.
+    # If defined, `storageClassName: <storageClass>`.
+    # If set to "-", `storageClassName: ""`, which disables dynamic provisioning
+    # If undefined (the default) or set to `null`, no storageClassName spec is
+    # set, choosing the default provisioner.
+    #
+    storageClass: null
+
+    # -- Access Modes for persistent volume
+    accessModes:
+      - ReadWriteOnce
+
+    # -- Persistent Volume size
+    size: 1Gi
+
+kafka: &kafka
+  protocol_version: "2.0.0"
+  brokers: "my-kafka-controller-0.my-kafka-controller-headless.kafka.svc.cluster.local:9092,my-kafka-controller-1.my-kafka-controller-headless.kafka.svc.cluster.local:9092,my-kafka-controller-2.my-kafka-controller-headless.kafka.svc.cluster.local:9092"
+  topic: "otlp_spans"
+  encoding: "otlp_proto"
+  auth:
+    plain_text:
+      username: user1
+      password: EWz1thErgo
+
+# Default values for OtelCollector
+signozCollector:
+  name: "signoz-collector"
+  image:
+    registry: docker.io
+    repository: signoz/signoz-otel-collector
+    tag: 0.88.21
+    pullPolicy: IfNotPresent
+
+  # -- Image Registry Secret Names for OtelCollector
+  # If set, this has higher precedence than the root level or global value of imagePullSecrets.
+  imagePullSecrets: []
+
+  initContainers:
+    init:
+      enabled: false
+      image:
+        registry: docker.io
+        repository: busybox
+        tag: 1.35
+        pullPolicy: IfNotPresent
+      command:
+        delay: 5
+        endpoint: /ping
+        waitMessage: "waiting for clickhouseDB"
+        doneMessage: "clickhouse ready, starting otel collector now"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+
+  # OpenTelemetry Collector executable
+  command:
+    # -- OtelCollector command name
+    name: /signoz-collector
+    # -- OtelCollector command extra arguments
+    extraArgs:
+      - --feature-gates=-pkg.translator.prometheus.NormalizeName
+
+  configMap:
+    # -- Specifies whether a configMap should be created (true by default)
+    create: true
+
+  # OtelCollector Service Account
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name:
+
+  # OtelCollector service
+  service:
+    # -- Annotations to use by service associated to OtelCollector
+    annotations: {}
+    # -- Labels to use by service associated to OtelCollector
+    labels: {}
+    # -- Service Type: LoadBalancer (allows external access) or NodePort (more secure, no extra cost)
+    type: ClusterIP
+
+  # -- OtelCollector Deployment annotation.
+  annotations:
+    "helm.sh/hook-weight": "3"
+  # -- OtelCollector pod(s) annotation.
+  podAnnotations:
+    signoz.io/scrape: 'true'
+    signoz.io/port: '8888'
+
+  # -- OtelCollector pod(s) labels.
+  podLabels: {}
+
+  # -- Additional environments to set for OtelCollector
+  additionalEnvs: {}
+    # env_key: env_value
+
+  # -- Whether to enable grouping of exceptions with same name and different stack trace.
+  # This is useful when you have a lot of exceptions with same name but different stack trace.
+  # This is a tradeoff between cardinality and accuracy of exception grouping.
+  lowCardinalityExceptionGrouping: false
+
+  minReadySeconds: 5
+  progressDeadlineSeconds: 120
+  replicaCount: 1
+
+  # OtelCollector RBAC config
+  clusterRole:
+    # -- Specifies whether a clusterRole should be created
+    create: true
+    # -- Annotations to add to the clusterRole
+    annotations: {}
+    # -- The name of the clusterRole to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name: ""
+    # -- A set of rules as documented here.
+    # ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+    # @default -- See `values.yaml` for defaults
+    rules:
+      # k8sattributes processor requires these permissions
+      - apiGroups: [""]
+        resources: ["pods", "namespaces", "nodes"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: ["apps"]
+        resources: ["replicasets"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: ["extensions"]
+        resources: ["replicasets"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: ["batch"]
+        resources: ["jobs"]
+        verbs: ["get", "list", "watch"]
+
+    # OtelCollector clusterRoleBinding
+    clusterRoleBinding:
+      # Annotations to add to the clusterRoleBinding
+      annotations: {}
+      # The name of the clusterRoleBinding to use.
+      # If not set and create is true, a name is generated using the fullname template
+      name: ""
+
+  # Configuration for ports
+  ports:
+    otlp:
+      # -- Whether to enable service port for OTLP gRPC
+      enabled: tru
+      # -- Container port for OTLP gRPC
+      containerPort: 4317
+      # -- Service port for OTLP gRPC
+      servicePort: 4317
+      # -- Node port for OTLP gRPC
+      nodePort: ""
+      # -- Protocol to use for OTLP gRPC
+      protocol: TCP
+    otlp-http:
+      # -- Whether to enable service port for OTLP HTTP
+      enabled: true
+      # -- Container port for OTLP HTTP
+      containerPort: 4318
+      # -- Service port for OTLP HTTP
+      servicePort: 4318
+      # -- Node port for OTLP HTTP
+      nodePort: ""
+      # -- Protocol to use for OTLP HTTP
+      protocol: TCP
+    jaeger-compact:
+      # -- Whether to enable service port for Jaeger Compact
+      enabled: false
+      # -- Container port for Jaeger Compact
+      containerPort: 6831
+      # -- Service port for Jaeger Compact
+      servicePort: 6831
+      # -- Node port for Jaeger Compact
+      nodePort: ""
+      # -- Protocol to use for Jaeger Compact
+      protocol: UDP
+    jaeger-thrift:
+      # -- Whether to enable service port for Jaeger Thrift HTTP
+      enabled: false
+      # -- Container port for Jaeger Thrift
+      containerPort: 14268
+      # -- Service port for Jaeger Thrift
+      servicePort: 14268
+      # -- Node port for Jaeger Thrift
+      nodePort: ""
+      # -- Protocol to use for Jaeger Thrift
+      protocol: TCP
+    jaeger-grpc:
+      # -- Whether to enable service port for Jaeger gRPC
+      enabled: false
+      # -- Container port for Jaeger gRPC
+      containerPort: 14250
+      # -- Service port for Jaeger gRPC
+      servicePort: 14250
+      # -- Node port for Jaeger gRPC
+      nodePort: ""
+      # -- Protocol to use for Jaeger gRPC
+      protocol: TCP
+    zipkin:
+      # -- Whether to enable service port for Zipkin
+      enabled: false
+      # -- Container port for Zipkin
+      containerPort: 9411
+      # -- Service port for Zipkin
+      servicePort: 9411
+      # -- Node port for Zipkin
+      nodePort: ""
+      # -- Protocol to use for Zipkin
+      protocol: TCP
+    prometheus:
+      # -- Whether to enable service port for SigNoz exported prometheus metrics
+      enabled: false
+      # -- Container port for SigNoz exported prometheus metrics
+      containerPort: 8889
+      # -- Service port for SigNoz exported prometheus metrics
+      servicePort: 8889
+      # -- Node port for SigNoz exported prometheus metrics
+      nodePort: ""
+      # -- Protocol to use for SigNoz exported prometheus metrics
+      protocol: TCP
+    metrics:
+      # -- Whether to enable service port for internal metrics
+      enabled: true
+      # -- Container port for internal metrics
+      containerPort: 8888
+      # -- Service port for internal metrics
+      servicePort: 8888
+      # -- Node port for internal metrics
+      nodePort: ""
+      # -- Protocol to use for internal metrics
+      protocol: TCP
+    zpages:
+      # -- Whether to enable service port for ZPages
+      enabled: false
+      # -- Container port for Zpages
+      containerPort: 55679
+      # -- Service port for Zpages
+      servicePort: 55679
+      # -- Node port for Zpages
+      nodePort: ""
+      # -- Protocol to use for Zpages
+      protocol: TCP
+    pprof:
+      # -- Whether to enable service port for pprof
+      enabled: false
+      # -- Container port for pprof
+      containerPort: 1777
+      # -- Service port for pprof
+      servicePort: 1777
+      # -- Node port for pprof
+      nodePort: ""
+      # -- Protocol to use for pprof
+      protocol: TCP
+    logsheroku:
+      # -- Whether to enable service port for logsheroku
+      enabled: false
+      # -- Container port for logsheroku
+      containerPort: 8081
+      # -- Service port for logsheroku
+      servicePort: 8081
+      # -- Node port for logsheroku
+      nodePort: ""
+      # -- Protocol to use for logsheroku
+      protocol: TCP
+    logsjson:
+      # -- Whether to enable service port for logsjson
+      enabled: false
+      # -- Container port for logsjson
+      containerPort: 8082
+      # -- Service port for logsjson
+      servicePort: 8082
+      # -- Node port for logsjson
+      nodePort: ""
+      # -- Protocol to use for logsjson
+      protocol: TCP
+
+  # -- Configure liveness and readiness probes.
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+  livenessProbe:
+    enabled: true
+    port: 13133
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    port: 13133
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  # -- Custom liveness probe
+  customLivenessProbe: {}
+  # -- Custom readiness probe
+  customReadinessProbe: {}
+
+  # -- Extra volumes mount for OtelCollector pod
+  extraVolumeMounts: []
+  # -- Extra volumes for OtelCollector pod
+  extraVolumes: []
+
+  # -- Configure resource requests and limits. Update according to your own use
+  # case as these values might not be suitable for your workload.
+  # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  #
+  # @default -- See `values.yaml` for defaults
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+    # limits:
+    #   cpu: "1"
+    #   memory: 2Gi
+
+  # -- OtelCollector priority class name
+  priorityClassName: ""
+  # -- Node selector for settings for OtelCollector pod
+  nodeSelector: {}
+  # -- Toleration labels for OtelCollector pod assignment
+  tolerations: []
+  # -- Affinity settings for OtelCollector pod
+  affinity: {}
+  # -- TopologySpreadConstraints describes how OtelCollector pods ought to spread
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: otel-collector
+
+  podSecurityContext: {}
+    # fsGroup: 2000
+
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 11
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 50
+    behavior: {}
+      # scaleDown:
+      #   stabilizationWindowSeconds: 300
+      #  policies:
+      #   - type: Pods
+      #     value: 1
+      #     periodSeconds: 180
+      # scaleUp:
+      #   stabilizationWindowSeconds: 300
+      #   policies:
+      #   - type: Pods
+      #     value: 2
+      #     periodSeconds: 60
+
+    autoscalingTemplate: []
+    keda:
+      enabled: false
+      pollingInterval: "30"   # check 30sec periodically for metrics data
+      cooldownPeriod: "300"   # once the load decreased, it will wait for 5 min and downscale
+      minReplicaCount: "1"    # should be >= replicaCount specified in values.yaml
+      maxReplicaCount: "5"
+      triggers:
+        - type: memory
+          metadata:
+            type: Utilization
+            value: "80"   # hpa make sure average Utilization <=80 by adding new pods
+        - type: cpu
+          metadata:
+            type: Utilization
+            value: "80"   # hpa make sure average Utlization <=80 by adding new pods
+
+  # -- Configurations for OtelCollector
+  # @default -- See `values.yaml` for defaults
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            max_recv_msg_size_mib: 16
+          http:
+            endpoint: 0.0.0.0:4318
+      kafka: *kafka
+    processors:
+      # default parsing of logs
+      # logstransform/internal:
+      #   operators:
+      #     - type: regex_parser
+      #       id: traceid
+      #       # https://regex101.com/r/yFW5UC/1
+      #       regex: '(?i)(^trace|(("| )+trace))((-|_||)id("|=| |-|:)*)(?P<trace_id>[A-Fa-f0-9]+)'
+      #       parse_from: body
+      #       parse_to: attributes.temp_trace
+      #       if: 'body matches "(?i)(^trace|((\"| )+trace))((-|_||)id(\"|=| |-|:)*)(?P<trace_id>[A-Fa-f0-9]+)"'
+      #       output: spanid
+      #     - type: regex_parser
+      #       id: spanid
+      #       # https://regex101.com/r/DZ2gng/1
+      #       regex: '(?i)(^span|(("| )+span))((-|_||)id("|=| |-|:)*)(?P<span_id>[A-Fa-f0-9]+)'
+      #       parse_from: body
+      #       parse_to: attributes.temp_trace
+      #       if: 'body matches "(?i)(^span|((\"| )+span))((-|_||)id(\"|=| |-|:)*)(?P<span_id>[A-Fa-f0-9]+)"'
+      #       output: trace_parser
+      #     - type: trace_parser
+      #       id: trace_parser
+      #       trace_id:
+      #         parse_from: attributes.temp_trace.trace_id
+      #       span_id:
+      #         parse_from: attributes.temp_trace.span_id
+      #       output: remove_temp
+      #     - type: remove
+      #       id: remove_temp
+      #       field: attributes.temp_trace
+      #       if: '"temp_trace" in attributes'
+      # Batch processor config.
+      # ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/batchprocessor/README.md
+      batch:
+        send_batch_size: 50000
+        timeout: 1s
+      # Resource detection processor config.
+      # ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/resourcedetectionprocessor/README.md
+      resourcedetection:
+        # detectors: include ec2/eks for AWS, gcp for GCP and azure/aks for Azure
+        # env detector included below adds custom labels using OTEL_RESOURCE_ATTRIBUTES envvar
+        detectors:
+          - env
+          # - elastic_beanstalk
+          # - eks
+          # - ecs
+          # - ec2
+          # - gcp
+          # - azure
+          # - heroku
+          - system
+        timeout: 2s
+        system:
+          hostname_sources: [dns, os]
+      # Memory Limiter processor.
+      # If set to null, will be overridden with values based on k8s resource limits.
+      # ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/memorylimiterprocessor/README.md
+      memory_limiter: null
+      signozspanmetrics/cumulative:
+        metrics_exporter: clickhousemetricswrite
+        latency_histogram_buckets:
+          [
+            100us,
+            1ms,
+            2ms,
+            6ms,
+            10ms,
+            50ms,
+            100ms,
+            250ms,
+            500ms,
+            1000ms,
+            1400ms,
+            2000ms,
+            5s,
+            10s,
+            20s,
+            40s,
+            60s,
+          ]
+        dimensions_cache_size: 100000
+        dimensions:
+          - name: service.namespace
+            default: default
+          - name: deployment.environment
+            default: default
+          - name: signoz.collector.id
+      signozspanmetrics/delta:
+        metrics_exporter: clickhousemetricswrite
+        latency_histogram_buckets:
+          [
+            100us,
+            1ms,
+            2ms,
+            6ms,
+            10ms,
+            50ms,
+            100ms,
+            250ms,
+            500ms,
+            1000ms,
+            1400ms,
+            2000ms,
+            5s,
+            10s,
+            20s,
+            40s,
+            60s,
+          ]
+        dimensions_cache_size: 100000
+        dimensions:
+          - name: service.namespace
+            default: default
+          - name: deployment.environment
+            default: default
+          - name: signoz.collector.id
+        aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA
+      # K8s Attribute processor config.
+      # ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/k8sattributesprocessor/README.md
+      k8sattributes:
+        # -- Whether to detect the IP address of agents and add it as an attribute to all telemetry resources.
+        # If set to true, Agents will not make any k8s API calls, do any discovery of pods or extract any metadata.
+        passthrough: false
+        # -- Filters can be used to limit each OpenTelemetry agent to query pods based on specific
+        # selector to only dramatically reducing resource requirements for very large clusters.
+        filter:
+          # -- Restrict each OpenTelemetry agent to query pods running on the same node
+          node_from_env_var: K8S_NODE_NAME
+        pod_association:
+          - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+          - sources:
+            - from: resource_attribute
+              name: k8s.pod.uid
+          - sources:
+            - from: connection
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.pod.start_time
+            - k8s.deployment.name
+            - k8s.node.name
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      zpages:
+        endpoint: localhost:55679
+      pprof:
+        endpoint: localhost:1777
+    exporters:
+      clickhousetraces:
+        datasource: tcp://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/${CLICKHOUSE_TRACE_DATABASE}
+        low_cardinal_exception_grouping: ${LOW_CARDINAL_EXCEPTION_GROUPING}
+      clickhousemetricswrite:
+        endpoint: tcp://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/${CLICKHOUSE_DATABASE}
+        timeout: 15s
+        resource_to_telemetry_conversion:
+          enabled: true
+      clickhouselogsexporter:
+        dsn: tcp://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/${CLICKHOUSE_LOG_DATABASE}
+        timeout: 10s
+      prometheus:
+        endpoint: 0.0.0.0:8889
+    service:
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
+      extensions: [health_check, zpages, pprof]
+      pipelines:
+        traces:
+          receivers: [otlp, kafka]
+          processors: [signozspanmetrics/cumulative, signozspanmetrics/delta, batch]
+          exporters: [clickhousetraces]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [clickhousemetricswrite]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [clickhouselogsexporter]
+
+# Default values for OtelCollector
+otelCollector:
+  name: "otel-collector"
+  image:
+    registry: docker.io
+    repository: otel/opentelemetry-collector-contrib
+    tag: 0.100.0-healthcheck
+    pullPolicy: IfNotPresent
+
+  # -- Image Registry Secret Names for OtelCollector
+  # If set, this has higher precedence than the root level or global value of imagePullSecrets.
+  imagePullSecrets: []
+
+  initContainers:
+    init:
+      enabled: false
+      image:
+        registry: docker.io
+        repository: busybox
+        tag: 1.35
+        pullPolicy: IfNotPresent
+      command:
+        delay: 5
+        endpoint: /ping
+        waitMessage: "waiting for clickhouseDB"
+        doneMessage: "clickhouse ready, starting otel collector now"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+
+  # OpenTelemetry Collector executable
+  command:
+    # -- OtelCollector command name
+    name: /otelcontribcol
+    # -- OtelCollector command extra arguments
+    extraArgs: []
+      # - --feature-gates=-pkg.translator.prometheus.NormalizeName
+
+  configMap:
+    # -- Specifies whether a configMap should be created (true by default)
+    create: true
+
+  # OtelCollector Service Account
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name:
+
+  # OtelCollector service
+  service:
+    # -- Annotations to use by service associated to OtelCollector
+    annotations: {}
+    # -- Labels to use by service associated to OtelCollector
+    labels: {}
+    # -- Service Type: LoadBalancer (allows external access) or NodePort (more secure, no extra cost)
+    type: ClusterIP
+
+  # -- OtelCollector Deployment annotation.
+  annotations: {}
+    # "helm.sh/hook-weight": "3"
+
+  # -- OtelCollector pod(s) annotation.
+  podAnnotations: {}
+    # signoz.io/scrape: 'true'
+    # signoz.io/port: '8888'
+
+  # -- OtelCollector pod(s) labels.
+  podLabels: {}
+
+  # -- Additional environments to set for OtelCollector
+  additionalEnvs: {}
+    # env_key: env_value
+
+  # -- Whether to enable grouping of exceptions with same name and different stack trace.
+  # This is useful when you have a lot of exceptions with same name but different stack trace.
+  # This is a tradeoff between cardinality and accuracy of exception grouping.
+  lowCardinalityExceptionGrouping: false
+
+  minReadySeconds: 5
+  progressDeadlineSeconds: 120
+  replicaCount: 1
+
+  # Configuration for ports
+  ports:
+    otlp:
+      # -- Whether to enable service port for OTLP gRPC
+      enabled: tru
+      # -- Container port for OTLP gRPC
+      containerPort: 4317
+      # -- Service port for OTLP gRPC
+      servicePort: 4317
+      # -- Node port for OTLP gRPC
+      nodePort: ""
+      # -- Protocol to use for OTLP gRPC
+      protocol: TCP
+    otlp-http:
+      # -- Whether to enable service port for OTLP HTTP
+      enabled: true
+      # -- Container port for OTLP HTTP
+      containerPort: 4318
+      # -- Service port for OTLP HTTP
+      servicePort: 4318
+      # -- Node port for OTLP HTTP
+      nodePort: ""
+      # -- Protocol to use for OTLP HTTP
+      protocol: TCP
+    metrics:
+      # -- Whether to enable service port for internal metrics
+      enabled: true
+      # -- Container port for internal metrics
+      containerPort: 8888
+      # -- Service port for internal metrics
+      servicePort: 8888
+      # -- Node port for internal metrics
+      nodePort: ""
+      # -- Protocol to use for internal metrics
+      protocol: TCP
+
+  # -- Configure liveness and readiness probes.
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+  livenessProbe:
+    enabled: true
+    port: 13133
+    path: /status
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    port: 13133
+    path: /status
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  # -- Custom liveness probe
+  customLivenessProbe: {}
+  # -- Custom readiness probe
+  customReadinessProbe: {}
+
+  # -- Extra volumes mount for OtelCollector pod
+  extraVolumeMounts: []
+  # -- Extra volumes for OtelCollector pod
+  extraVolumes: []
+
+  # -- Configure resource requests and limits. Update according to your own use
+  # case as these values might not be suitable for your workload.
+  # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  #
+  # @default -- See `values.yaml` for defaults
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+    # limits:
+    #   cpu: "1"
+    #   memory: 2Gi
+
+  # -- OtelCollector priority class name
+  priorityClassName: ""
+  # -- Node selector for settings for OtelCollector pod
+  nodeSelector: {}
+  # -- Toleration labels for OtelCollector pod assignment
+  tolerations: []
+  # -- Affinity settings for OtelCollector pod
+  affinity: {}
+  # -- TopologySpreadConstraints describes how OtelCollector pods ought to spread
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: otel-collector
+
+  podSecurityContext: {}
+    # fsGroup: 2000
+
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 11
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 50
+    behavior: {}
+      # scaleDown:
+      #   stabilizationWindowSeconds: 300
+      #  policies:
+      #   - type: Pods
+      #     value: 1
+      #     periodSeconds: 180
+      # scaleUp:
+      #   stabilizationWindowSeconds: 300
+      #   policies:
+      #   - type: Pods
+      #     value: 2
+      #     periodSeconds: 60
+
+    autoscalingTemplate: []
+    keda:
+      enabled: false
+      pollingInterval: "30"   # check 30sec periodically for metrics data
+      cooldownPeriod: "300"   # once the load decreased, it will wait for 5 min and downscale
+      minReplicaCount: "1"    # should be >= replicaCount specified in values.yaml
+      maxReplicaCount: "5"
+      triggers:
+        - type: memory
+          metadata:
+            type: Utilization
+            value: "80"   # hpa make sure average Utilization <=80 by adding new pods
+        - type: cpu
+          metadata:
+            type: Utilization
+            value: "80"   # hpa make sure average Utlization <=80 by adding new pods
+
+  # -- Configurations for OtelCollector
+  # @default -- See `values.yaml` for defaults
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            max_recv_msg_size_mib: 16
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch:
+        send_batch_size: 50000
+        timeout: 1s
+    extensions:
+      healthcheckv2:
+        use_v2: true
+        grpc:
+          endpoint: "0.0.0.0:13132"
+          transport: "tcp"
+        http:
+          endpoint: "0.0.0.0:13133"
+          status:
+            enabled: true
+          config:
+            enabled: false
+    exporters:
+      kafka: *kafka
+    service:
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
+      extensions: [healthcheckv2]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [kafka]
+
+schemaMigrator:
+  enabled: true
+  name: "schema-migrator"
+
+  image:
+    registry: docker.io
+    repository: signoz/signoz-schema-migrator
+    tag: 0.88.21
+    pullPolicy: IfNotPresent
+
+  args: {}
+  annotations:
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": "before-hook-creation"
+
+  # -- Whether to enable replication for schemaMigrator
+  enableReplication: false
+
+  # -- Node selector for settings for schemaMigrator
+  nodeSelector: {}
+  # -- Toleration labels for schemaMigrator assignment
+  tolerations: []
+  # -- Affinity settings for schemaMigrator
+  affinity: {}
+
+  initContainers:
+    wait:
+      image:
+        registry: docker.io
+        repository: groundnuty/k8s-wait-for
+        tag: v2.0
+        pullPolicy: IfNotPresent
+    init:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: busybox
+        tag: 1.35
+        pullPolicy: IfNotPresent
+      command:
+        delay: 5
+        endpoint: /ping
+        waitMessage: "waiting for clickhouseDB"
+        doneMessage: "clickhouse ready, starting schema migrator now"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+    chReady:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: clickhouse/clickhouse-server
+        tag: 24.1.2-alpine
+        pullPolicy: IfNotPresent
+      command:
+        - "sh"
+        - "-c"
+        - |
+          echo "Running clickhouse ready check"
+          while true
+          do
+            version="$(CLICKHOUSE_VERSION)"
+            shards="$(CLICKHOUSE_SHARDS)"
+            replicas="$(CLICKHOUSE_REPLICAS)"
+            current_version="$(clickhouse client --host ${CLICKHOUSE_HOST} --port ${CLICKHOUSE_PORT} --user "${CLICKHOUSE_USER}" --password "${CLICKHOUSE_PASSWORD}" -q "SELECT version()")"
+            if [ -z "$current_version" ]; then
+              echo "waiting for clickhouse to be ready"
+              sleep 5
+              continue
+            fi
+            if [ -z "$(echo "$current_version" | grep "$version")" ]; then
+              echo "expected version: $version, current version: $current_version"
+              echo "waiting for clickhouse with correct version"
+              sleep 5
+              continue
+            fi
+            current_shards="$(clickhouse client --host ${CLICKHOUSE_HOST} --port ${CLICKHOUSE_PORT} --user "${CLICKHOUSE_USER}" --password "${CLICKHOUSE_PASSWORD}" -q "SELECT count(DISTINCT(shard_num)) FROM system.clusters WHERE cluster = '${CLICKHOUSE_CLUSTER}'")"
+            if [ -z "$current_shards" ]; then
+              echo "waiting for clickhouse to be ready"
+              sleep 5
+              continue
+            fi
+            if [ "$current_shards" -ne "$shards" ]; then
+              echo "expected shard count: $shards, current shard count: $current_shards"
+              echo "waiting for clickhouse with correct shard count"
+              sleep 5
+              continue
+            fi
+            current_replicas="$(clickhouse client --host ${CLICKHOUSE_HOST} --port ${CLICKHOUSE_PORT} --user "${CLICKHOUSE_USER}" --password "${CLICKHOUSE_PASSWORD}" -q "SELECT count(DISTINCT(replica_num)) FROM system.clusters WHERE cluster = '${CLICKHOUSE_CLUSTER}'")"
+            if [ -z "$current_replicas" ]; then
+              echo "waiting for clickhouse to be ready"
+              sleep 5
+              continue
+            fi
+            if [ "$current_replicas" -ne "$replicas" ]; then
+              echo "expected replica count: $replicas, current replica count: $current_replicas"
+              echo "waiting for clickhouse with correct replica count"
+              sleep 5
+              continue
+            fi
+            break
+          done
+          echo "clickhouse ready, starting schema migrator now"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+
+alertmanager:
+  enabled: false
+  name: "alertmanager"
+  replicaCount: 1
+
+  image:
+    registry: docker.io
+    repository: signoz/alertmanager
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: 0.23.4
+
+  # -- Image Registry Secret Names for Alertmanager
+  # If set, this has higher precedence than the root level or global value of imagePullSecrets.
+  imagePullSecrets: []
+
+  # -- Alertmanager custom command override
+  command: []
+  # -- Alertmanager extra Arguments
+  extraArgs: {}
+
+  # Alertmanager Service Account
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name:
+
+  # Alertmanager service
+  service:
+    # -- Annotations to use by service associated to Alertmanager
+    annotations: {}
+    # -- Labels to use by service associated to Alertmanager
+    labels: {}
+    # -- Service Type: LoadBalancer (allows external access) or NodePort (more secure, no extra cost)
+    type: ClusterIP
+    # -- Alertmanager HTTP port
+    port: 9093
+    # -- Alertmanager cluster port
+    clusterPort: 9094
+    # -- Set this to you want to force a specific nodePort. Must be use with service.type=NodePort
+    nodePort: null
+
+  initContainers:
+    init:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: busybox
+        tag: 1.35
+        pullPolicy: IfNotPresent
+      command:
+        delay: 5
+        endpoint: /api/v1/health?live=1
+        waitMessage: "waiting for query-service"
+        doneMessage: "query-service ready, starting alertmanager now"
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 100Mi
+        # limits:
+        #   cpu: 100m
+        #   memory: 100Mi
+
+  podSecurityContext:
+    fsGroup: 65534
+  dnsConfig: {}
+    # nameservers:
+    #   - 1.2.3.4
+    # searches:
+    #   - ns1.svc.cluster-domain.example
+    #   - my.dns.search.suffix
+    # options:
+    #   - name: ndots
+    #     value: "2"
+    #   - name: edns0
+  securityContext:
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    runAsUser: 65534
+    runAsNonRoot: true
+    runAsGroup: 65534
+
+  additionalPeers: []
+
+  livenessProbe:
+    httpGet:
+      path: /
+      port: http
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+
+  # -- Configure resource requests and limits. Update according to your own use
+  # case as these values might not be suitable for your workload.
+  # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  #
+  # @default -- See `values.yaml` for defaults
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    # limits:
+    #   cpu: 200m
+    #   memory: 200Mi
+
+  # -- Alertmanager priority class name
+  priorityClassName: ""
+  # -- Node selector for settings for Alertmanager pod
+  nodeSelector: {}
+  # -- Toleration labels for Alertmanager pod assignment
+  tolerations: []
+  # -- Affinity settings for Alertmanager pod
+  affinity: {}
+  # -- TopologySpreadConstraints describes how Alertmanager pods ought to spread
+  topologySpreadConstraints: []
+
+  statefulSet:
+    annotations:
+      "helm.sh/hook-weight": "4"
+
+  podAnnotations: {}
+  podLabels: {}
+
+  persistence:
+    # -- Enable data persistence using PVC for Alertmanager data.
+    enabled: true
+
+    # -- Name of an existing PVC to use (only when deploying a single replica)
+    existingClaim: ""
+
+    # -- Persistent Volume Storage Class to use.
+    # If defined, `storageClassName: <storageClass>`.
+    # If set to "-", `storageClassName: ""`, which disables dynamic provisioning
+    # If undefined (the default) or set to `null`, no storageClassName spec is
+    # set, choosing the default provisioner.
+    #
+    storageClass: null
+
+    # -- Access Modes for persistent volume
+    accessModes:
+      - ReadWriteOnce
+
+    # -- Persistent Volume size
+    size: 100Mi
+
+  ## Using the config, alertmanager.yml file is created.
+  ## We no longer need the config file as query services
+  ## delivers the required config.
+  # config:
+  # global:
+  #   resolve_timeout: 1m
+  #   slack_api_url: 'https://hooks.slack.com/services/xxx'
+
+  # templates:
+  #   - '/etc/alertmanager/*.tmpl'
+
+  # receivers:
+  # - name: 'slack-notifications'
+  #   slack_configs:
+  #   - channel: '#alerts'
+  #     send_resolved: true
+  #     icon_url: https://avatars3.githubusercontent.com/u/3380462
+  #     title: '{{ template "slack.title" . }}'
+  #     text: '{{ template "slack.text" . }}'
+
+  # route:
+  #   receiver: 'slack-notifications'
+
+  ## Templates are no longer needed as they are included
+  ## from frontend placeholder while creating alert channels.
+  # templates:
+  #   title.tmpl: |-
+  #       {{ define "slack.title" }}
+  #       [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} for {{ .CommonLabels.job }}
+  #       {{- if gt (len .CommonLabels) (len .GroupLabels) -}}
+  #         {{" "}}(
+  #         {{- with .CommonLabels.Remove .GroupLabels.Names }}
+  #           {{- range $index, $label := .SortedPairs -}}
+  #             {{ if $index }}, {{ end }}
+  #             {{- $label.Name }}="{{ $label.Value -}}"
+  #           {{- end }}
+  #         {{- end -}}
+  #         )
+  #       {{- end }}
+  #       {{ end }}
+  #   text.tmpl: |-
+  #       {{ define "slack.text" }}
+  #       {{ range .Alerts -}}
+  #       *Alert:* {{ .Labels.alertname }}{{ if .Labels.severity }} - `{{ .Labels.severity }}`{{ end }}
+
+  #       *Summary:* {{ .Annotations.summary }}
+  #       *Description:* {{ .Annotations.description }}
+
+  #       *Details:*
+  #         {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+  #         {{ end }}
+  #       {{ end }}
+  #       {{ end }}
+
+  ## Monitors ConfigMap changes and POSTs to a URL
+  ## Ref: https://github.com/jimmidyson/configmap-reload
+  ##
+  configmapReload:
+    ## If false, the configmap-reload container will not be deployed
+    ##
+    enabled: false
+
+    ## configmap-reload container name
+    ##
+    name: configmap-reload
+
+    ## configmap-reload container image
+    ##
+    image:
+      repository: jimmidyson/configmap-reload
+      tag: v0.5.0
+      pullPolicy: IfNotPresent
+
+    # containerPort: 9533
+
+    # -- Configure resource requests and limits. Update as per your need.
+    # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
+    #
+    # @default -- See `values.yaml` for defaults
+    resources:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+      # limits:
+      #   cpu: 200m
+      #   memory: 200Mi

@@ -1,0 +1,116 @@
+# Setup ClickHouse Keeper StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  # nodes would be named as clickhouse-keeper-0, clickhouse-keeper-1, clickhouse-keeper-2
+  name: {{ include "clickhouse-keeper.fullname" . }}
+  labels:
+    {{- include "clickhouse-keeper.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "clickhouse-keeper.selectorLabels" . | nindent 6 }}
+  serviceName: clickhouse-keepers
+  replicas: {{ .Values.replicaCount }}
+  podManagementPolicy: OrderedReady
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        prometheus.io/port: '7000'
+        prometheus.io/scrape: 'true'
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "clickhouse-keeper.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clickhouse-keeper.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: clickhouse-keeper-settings
+              mountPath: /etc/clickhouse-keeper/
+            - name: clickhouse-keeper-datadir-volume
+              mountPath: /var/lib/clickhouse-keeper
+            - name: clickhouse-keeper-scripts
+              mountPath: /conf/
+            {{- with .Values.volumeMounts }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+          command:
+            - /conf/keeperStart.sh
+          env:
+            - name: POD_INDEX
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+          # lifecycle:
+          #   preStop:
+          #     exec:
+          #       command:
+          #         - /conf/keeperTeardown.sh
+          ports:
+            - containerPort: {{ .Values.service.clientPort }}
+              name: client
+              protocol: TCP
+            - containerPort: {{ .Values.service.raftPort }}
+              name: raft
+              protocol: TCP
+            - containerPort: {{ .Values.service.metricsPort }}
+              name: metrics
+              protocol: TCP
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 40
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: clickhouse-keeper-settings
+          configMap:
+            name: {{ include "clickhouse-keeper.fullname" . }}-settings
+            items:
+              - key: keeper_config.xml
+                path: keeper_config.xml
+        - name: clickhouse-keeper-scripts
+          configMap:
+            name: clickhouse-keeper-scripts
+            defaultMode: 0755
+        {{- with .Values.volumes }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: clickhouse-keeper-datadir-volume
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 25Gi
