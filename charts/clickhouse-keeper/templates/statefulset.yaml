@@ -100,7 +100,7 @@ spec:
                 path: keeper_config.xml
         - name: clickhouse-keeper-scripts
           configMap:
-            name: clickhouse-keeper-scripts
+            name: {{ include "clickhouse-keeper.fullname" . }}-scripts
             defaultMode: 0755
         {{- with .Values.volumes }}
           {{- toYaml . | nindent 8 }}
