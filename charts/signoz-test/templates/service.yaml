@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "signoz-test.fullname" . }}-hotrod
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "signoz-test.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "signoz-test.selectorLabels" . | nindent 4 }}

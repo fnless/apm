@@ -81,3 +81,11 @@ externalClickhouse:
 ```
 
 make signoz
+
+## signoz-test
+
+```yaml
+namespace: ""
+otlp:
+  endpoint: "http://otel-collector:4318"
+```

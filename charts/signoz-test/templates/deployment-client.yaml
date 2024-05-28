@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "signoz-test.fullname" . }}-load-hotrod
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "signoz-test-load-hotrod.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.loadHotrod.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "signoz-test-load-hotrod.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.loadHotrod.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "signoz-test-load-hotrod.labels" . | nindent 8 }}
+        {{- with .Values.loadHotrod.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.loadHotrod.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.loadHotrod.podSecurityContext | nindent 8 }}
+      containers:
+        - name: hotrod
+          securityContext:
+            {{- toYaml .Values.loadHotrod.securityContext | nindent 12 }}
+          image: "{{ .Values.loadHotrod.image.repository }}:{{ .Values.loadHotrod.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.loadHotrod.image.pullPolicy }}
+          command:
+          # - /bin/sleep
+          # - 10d
+          - /docker-entrypoint.sh
+          env:
+          - name: ATTACKED_HOST
+            value: http://{{ include "signoz-test.fullname" . }}-hotrod:{{ .Values.service.port }}
+          - name: LOCUST_MODE
+            value: standalone
+          - name: NO_PROXY
+            value: standalone
+          - name: TASK_DELAY_FROM
+            value: "5"
+          - name: TASK_DELAY_TO
+            value: "30"
+          - name: QUIET_MODE
+            value: "${QUIET_MODE:-false}"
+          - name: LOCUST_OPTS
+            value: "--headless -u 10 -r 1"
+          livenessProbe:
+            {{- toYaml .Values.loadHotrod.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.loadHotrod.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.loadHotrod.resources | nindent 12 }}
+          volumeMounts:
+             - name: load-hotrod-locustfile
+               mountPath: /locust
+            {{- with .Values.loadHotrod.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: load-hotrod-locustfile
+          configMap:
+            name: {{ include "signoz-test.fullname" . }}-load-hotrod-locustfile
+            items:
+              - key: locustfile.py
+                path: locustfile.py
+        {{- with .Values.loadHotrod.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.loadHotrod.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.loadHotrod.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.loadHotrod.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
