@@ -53,10 +53,14 @@ spec:
           command:
             - /conf/keeperStart.sh
           env:
-            - name: POD_INDEX
+            - name: POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+                  fieldPath: metadata.name
+            # - name: POD_INDEX
+            #   valueFrom:
+            #     fieldRef:
+            #       fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
           # lifecycle:
           #   preStop:
           #     exec:

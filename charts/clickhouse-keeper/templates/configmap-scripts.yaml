@@ -7,6 +7,10 @@ metadata:
 data:
   env.sh: |
     #!/usr/bin/env bash
+    set -ex
+    # Generate mysql server-id from pod ordinal index.
+    [[ $POD_NAME =~ -([0-9]+)$ ]] || exit 1
+    POD_INDEX=${BASH_REMATCH[1]}
     export KEEPER_SERVER_ID=`expr $POD_INDEX + 1`
 
   keeperStart.sh: |
