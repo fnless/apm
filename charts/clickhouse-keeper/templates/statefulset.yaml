@@ -57,6 +57,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            ## Pod index label
+            ## FEATURE STATE: Kubernetes v1.28 [beta]
+            ##
             # - name: POD_INDEX
             #   valueFrom:
             #     fieldRef:
