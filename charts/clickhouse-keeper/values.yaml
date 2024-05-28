@@ -12,6 +12,7 @@ image:
   # tag: "24.4-alpine"
 
 imagePullSecrets: []
+namespace: ""
 nameOverride: ""
 fullnameOverride: ""
 

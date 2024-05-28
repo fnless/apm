@@ -3,6 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "schemaMigrator.fullname" . }}-upgrade
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
     {{- include "schemaMigrator.selectorLabelsUpgrade" . | nindent 4 }}
   {{- if .Values.schemaMigrator.annotations }}

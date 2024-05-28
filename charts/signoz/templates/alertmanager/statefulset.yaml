@@ -4,6 +4,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "alertmanager.fullname" . }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
     {{- include "alertmanager.labels" . | nindent 4 }}
   {{- if .Values.alertmanager.statefulSet.annotations }}

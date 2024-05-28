@@ -4,6 +4,7 @@ kind: Service
 metadata:
   # DNS would be like clickhouse-keeper.namespace.svc
   name: {{ include "clickhouse-keeper.fullname" . }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
     {{- include "clickhouse-keeper.labels" . | nindent 4 }}
 spec:

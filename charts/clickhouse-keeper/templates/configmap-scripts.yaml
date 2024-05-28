@@ -4,6 +4,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "clickhouse-keeper.fullname" . }}-scripts
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
 data:
   env.sh: |
     #!/usr/bin/env bash

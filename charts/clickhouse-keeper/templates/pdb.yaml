@@ -2,7 +2,8 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: clickhouse-keeper-pod-disruption-budget
+  name: {{ include "clickhouse-keeper.fullname" . }}-pdb
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
 spec:
   selector:
     matchLabels:

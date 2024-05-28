@@ -20,6 +20,7 @@ global:
   # When set to 'aws' or 'gcp' along with `installCustomStorageClass` enabled, then new expandible storage class is created.
   cloud: other
 
+namespace: ""
 # -- SigNoz chart name override
 nameOverride: ""
 

@@ -4,6 +4,7 @@ kind: StatefulSet
 metadata:
   # nodes would be named as clickhouse-keeper-0, clickhouse-keeper-1, clickhouse-keeper-2
   name: {{ include "clickhouse-keeper.fullname" . }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
     {{- include "clickhouse-keeper.labels" . | nindent 4 }}
 spec:

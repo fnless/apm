@@ -3,7 +3,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: {{ include "signozCollector.clusterRoleName" . }}
-  namespace: {{ include "signoz.namespace" . }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
   {{- with .Values.signozCollector.clusterRole.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
