@@ -86,7 +86,7 @@ tolerations: []
 affinity: {}
 
 otlp:
-  endpoint: "http://otel-collector:4318"
+  endpoint: "http://signoz-otel-collector:4318"
 
 loadHotrod:
   name: "load-hotrod"

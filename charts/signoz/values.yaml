@@ -721,9 +721,9 @@ signozCollector:
     requests:
       cpu: 100m
       memory: 200Mi
-    # limits:
-    #   cpu: "1"
-    #   memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
 
   # -- OtelCollector priority class name
   priorityClassName: ""
@@ -859,7 +859,10 @@ signozCollector:
       # Memory Limiter processor.
       # If set to null, will be overridden with values based on k8s resource limits.
       # ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/memorylimiterprocessor/README.md
-      memory_limiter: null
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 800
+        spike_limit_mib: 800
       signozspanmetrics/cumulative:
         metrics_exporter: clickhousemetricswrite
         latency_histogram_buckets:
@@ -976,7 +979,7 @@ signozCollector:
       pipelines:
         traces:
           receivers: [otlp, kafka]
-          processors: [signozspanmetrics/cumulative, signozspanmetrics/delta, batch]
+          processors: [memory_limiter, signozspanmetrics/cumulative, signozspanmetrics/delta, batch]
           exporters: [clickhousetraces]
         metrics:
           receivers: [otlp]

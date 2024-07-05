@@ -68,14 +68,7 @@ spec:
                   You can reserve some amount of free space on any disk (including default) by adding
                   keep_free_space_bytes tag.
                 -->
-                <type>s3</type>
-                <endpoint>{{ .Values.coldStorage.endpoint }}</endpoint>
-                {{- if .Values.coldStorage.role.enabled }}
-                <use_environment_credentials>true</use_environment_credentials>
-                {{- else }}
-                <access_key_id>{{ .Values.coldStorage.accessKey }}</access_key_id>
-                <secret_access_key>{{ .Values.coldStorage.secretAccess }}</secret_access_key>
-                {{- end }}
+                <keep_free_space_bytes>{{ .Values.coldStorage.defaultKeepFreeSpaceBytes }}</keep_free_space_bytes>
               </default>
               {{- if eq .Values.coldStorage.type "s3" }}
               <s3>
