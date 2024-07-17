@@ -722,8 +722,8 @@ signozCollector:
       cpu: 100m
       memory: 200Mi
     limits:
-      cpu: "2"
-      memory: 4Gi
+      cpu: "8"
+      memory: 16Gi
 
   # -- OtelCollector priority class name
   priorityClassName: ""
@@ -836,8 +836,10 @@ signozCollector:
       # Batch processor config.
       # ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/batchprocessor/README.md
       batch:
-        send_batch_size: 50000
-        timeout: 1s
+        send_batch_max_size: 41000
+        send_batch_size: 40000
+        timeout: 10s
+
       # Resource detection processor config.
       # ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/resourcedetectionprocessor/README.md
       resourcedetection:
@@ -961,6 +963,11 @@ signozCollector:
       clickhousetraces:
         datasource: tcp://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/${CLICKHOUSE_TRACE_DATABASE}
         low_cardinal_exception_grouping: ${LOW_CARDINAL_EXCEPTION_GROUPING}
+        sending_queue:
+          enabled: true
+          num_consumers: 20
+          queue_size: 1000
+        timeout: 60s
       clickhousemetricswrite:
         endpoint: tcp://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/${CLICKHOUSE_DATABASE}
         timeout: 15s
